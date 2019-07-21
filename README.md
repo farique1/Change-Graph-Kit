@@ -5,7 +5,7 @@
 Back in the olden MSX days, I wanted to be able to change the graphics on the games I played, working on cassetes and without assembler knowledge, however, the way I managed to do this was to make three very small Basic programs that could live on memory, one at a time, without conflicting with the games they intended to modify, hence the "Kit". They worked but they were not pretty.  
 So, for a long time, I wanted to know how far I could go remaking it and at the same time I also wanted to know how close I could get to my usual workflow coding in Basic for the MSX.  
 
-That is why **Change Graph Kit** was reborn, as an experiment on several things, among them [MSX Basic Dignified](https://github.com/farique1/msx-basic-dignified), a Python program that convert an MSX Basic written with modern standards to the classic native format.   
+That is why **Change Graph Kit** was reborn, as an experiment on several things, among them [**MSX Basic Dignified**](https://github.com/farique1/msx-basic-dignified), a Python program that convert an MSX Basic written with modern standards to the classic native format.   
 
 > The versions of Change Graph Kit here are:  
 >[`CGK-Dignified.bad`](https://github.com/farique1/Change-Graph-Kit/blob/master/CGK-Dignified.bad) - The most recent **MSX Basic Dignified** version, using long name variables (also bug fixes).  
