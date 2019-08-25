@@ -1,44 +1,26 @@
 ' CHANGE GRAPH KIT
-' v1.4
+' v1.3
+' "File requester", New file confirmation
 ' Edit uncompressed graphics on MSX binary files on disk
-' NEW
-'   ML Routines
-'     quicly clear the scan area
-'     show and erase window requester
-'     erese and invert the mini preview
-'     refresh the edit area with the mini preview data
-'   Faster save using the mini preview data
-'   Multi purpose window requester
-'   Edit screen mini preview with independent colors
-'   No more save, was not needed. P key now exits
-'   File always closed on exit, new, errors or break
-'   On Stop handling of break
-'   Better error report (portuguese and english only)
-'
 ' Copyright (1984 - 2019) - Fred Rique (farique)
 ' https://github.com/farique1/Change-Graph-Kit
-'
 ## MSX Basic Dignified version
 ## Convert to Classic MSX Basic with
 ## https://github.com/farique1/msx-basic-dignified 
+'
 
 ## Sublime Build settings
-##BB:machine=dd
-## BB:export_path=/Users/Farique/Documents/Dev/msx-basic-dignified/
-##BB:export_file=CGK-140.asc
-## BB:convert_only=True
-## BB:throttle=False
-## BB:arguments=-vs, -sl
-## BB:override_machine=Philips_NMS_8250
-## BB:override_extension=Microsol_Disk:SlotB
+###BB:export_path=/Users/Farique/Documents/Dev/msx-basic-dignified/
+###BB:export_file=CGK-conv.bas
+###BB:convert_only=True
+###BB:throttle=True
+###BB:arguments=-vs, -sl
 
-declare colorBase, color1, color2, color3, color4, color5, color6
+declare colorBase, color1, color2, color3, color4
 declare haltScan, isOverview, goOverview, keysPage
 
 define [disp cursor] [cursorDisplace = cursorPos - regionStart]
-define [pause] [a$=inkey$:ifa$<>" "then{@}]
 
-on stop gosub {stopped} :stop on
 on error goto {error}
 ~error_type = 0
 
@@ -46,7 +28,7 @@ screen 0 :color 15,1,1 :width 40 :key off
 defint a-z
 dim ~get_area(20,2) 
 def fn colorBase(x) = abs(x mod 16 + 16) mod 16
-color1 = 1 :color2 = 15 :color3 = 2 :color4 = 6 :color5 = 2 :color6 = 1
+color1 = 1 :color2 = 15 :color3 = 2 :color4 = 6
 haltScan = 0 :isOverview = 0 :goOverview = 0 :keysPage = 0
 
 ~gameName$ = "" ' leave blank to enable file request
@@ -58,7 +40,7 @@ if gameName$ <> "" then goto {inicializacao}
 cls
 ~error_type = 1
 [?@]14,8 "Insert disk"
-[?@]11,10 "and press any key"
+[?@]12,10 "and press space"
 a$ = inkey$: if a$ = "" goto {@}
 cls
 files "*"+gameExtension$
@@ -127,11 +109,10 @@ return
 	declare bytes$, lowByte$, highByte$, gameStart, gameEnd
 
 	cls :screen 1 :width 32
-	vpoke 6914,0 :vpoke 6918,1 :vpoke 6922,2 :vpoke 6926,3 :vpoke 6930,2 ## Assign sprites
+	vpoke 6914,0 :vpoke 6918,1 :vpoke 6922,2 :vpoke 6926,3 :vpoke 6930,2 'Assign sprites
 
-	[?@]10,11 "INITIALIZING"
+	[?@]10,11  "INITIALIZING"
 
-	[?@]10,13 "    GAME    "
 	open gameName$ as #1 len = 1
 	field #1,1 as bytes$
 	get #1,3 :lowByte$ = bytes$ :get #1,2 :highByte$ = bytes$
@@ -143,45 +124,17 @@ return
 	~regionStart = &h1 :~spriteStep = 8 :~regionStep = 800 :haltScan = 1
 	~cursorPos = regionStart :~cursorX = 16 :~cursorY = 23 : ~cursorSize = 8
 
-	[?@]10,13 "   COLORS   "
 	gosub {set_color}
 
-	[?@]10,13 " ML SUPPORT "
-	~MLs = &hd000
-	## Insert ML routines
-	## Pass variables with pokes from MLs to MLs+7
-	## scan area start=&h0400 length=&h0320
-	## mini preview start=&h0040 lenght=&h0020
-	## window request length=&h0060 VRAM=&h1940
-	define [var0][poke MLs+0], [var1][poke MLs+1], [var2][poke MLs+2], [var3][poke MLs+3]
-	define [var4][poke MLs+4], [var5][poke MLs+5], [var6][poke MLs+6], [var7][poke MLs+7]
-	define [fill_VRAM][a=usr0(0)], [invert_VRAM][a=usr1(0)], [copy_to_VRAM][a=usr2(0)]
-	define [copy_from_VRAM][a=usr3(0)], [populate_edit][a=usr4(0)]
-	for f = 0 to 145 :read a$ :[?@]14,15 145-f:poke MLs+f,val("&h"+a$) :next:[?@]14,15 "   "
-	defusr0 = MLs+&h08	' fill VRAM 		0=pattern: 1,2=start: 3,4=length
-	defusr1 = MLs+&h0b	' invert VRAM 		0=length: 1,2=start
-	defusr2 = MLs+&h0e	' copy to VRAM 		0,1=length: 2,3=VRAM
-	defusr3 = MLs+&h11	' copy from VRAM 	0,1=length: 2,3=VRAM
-	defusr4 = MLs+&h14	' populate edit 	0=colunms: 1=lines 	
-	[var0],0:[var1],&h00:[var2],&h04:[var3],&h20:[var4],&h03:[fill_VRAM]
-
-	[?@]10,13 " ERROR MSGS "
-	dim ~errorM(36)
-	' Using the time format in ROM to determine language
-	if (peek(&h2b) and 112) = 32 then restore {portuguese_ROM} else restore {english_ROM}
-	for f = 1 to 36: read a :errorM(f) = a :next
-	restore {character_shapes}
-
-	[?@]10,13 "   SHAPES   "
-	## redefine characters and sprites
-	[?@]15,15 "07"
-	for f = 0 to 23 :read a :vpoke &h0008 + f,a :next :[?@]15,15 "06" ## faces,hearth to [=] (lower bar)
-	for f = 0 to 31         :vpoke &h0040 + f,0 :next :[?@]15,15 "05" ## dot, circles, male to blank
-	for f = 0 to 7  :read a :vpoke &h0080 + f,a :next :[?@]15,15 "04" ## cross half horizontal to pixel empty
-	for f = 0 to 7  :read a :vpoke &h00F8 + f,a :next :[?@]15,15 "03" ## cross half vertical to filled box
-	for f = 0 to 7  :read a :vpoke &h0720 + f,a :next :[?@]15,15 "02" ## sigma to pixel filled
-	for f = 0 to 23 :read a :vpoke &h0740 + f,a :next :[?@]15,15 "01" ## phi to return, theta to space, omega to arrows
-	for f = 0 to 31 :read a :vpoke &h3800 + f,a :next :[?@]15,15 "00" ## Sprites
+	## redefine colors and characters
+	for f = 0 to 7  :read a :vpoke 1856  + f,a :next
+	for f = 0 to 7  :read a :vpoke 1864  + f,a :next
+	for f = 0 to 7  :read a :vpoke 1872  + f,a :next
+	for f = 0 to 23 :read a :vpoke 8     + f,a :next
+	for f = 0 to 7  :read a :vpoke 1824  + f,a :next
+	for f = 0 to 7  :read a :vpoke 128   + f,a :next
+	for f = 0 to 7  :read a :vpoke 248   + f,a :next 
+	for f = 0 to 31 :read a :vpoke 14336 + f,a :next
 
 	{search_screen}
 		cls
@@ -209,23 +162,24 @@ return
 		[?@]3,21  string$(4-len(hex$(1)),"0")+hex$(1)
 		[?@]8,21  string$(4-len(hex$(gameLength)),"0")+hex$(gameLength)
 		[?@]13,2 "XWWWWWWWRWWWWWWWWY"
+		' Cm = Cursor Movement   Rm = Region Movement
 		[?@]13,3 "VCm #  "+right$(str$(spriteStep),1)+"VEditing V"
 		[?@]13,4 "VRm #"+right$(hex$(regionStep),3)+"V"+left$(gameName$,8)+"V"
 		[?@]13,5 "ZWWWWWWWQWWWWWWWW["
 
 		{keys_page_start}
 			on keysPage goto {keys_page_2}
-			[?@]13,7  "VêVMove VèVEdit   "
-			[?@]13,9  "VéVStep VDVSize   "
-			[?@]13,11 "VBVClearVRVRefresh"
+			[?@]13,7 "VêVMove VPVSave   "
+			[?@]13,9 "VéVStep VDVSize   "
+			[?@]13,11 "VèVEdit VRVRefresh"
 			[?@]13,13 "VFVFreeze/Unfreeze"
 			[?@]13,15 "VEVExplode/Ovrview"
 			[?@]13,17 "                  "
 		goto {keys_page_end}
 
 		{keys_page_2}
-			[?@]13,7  "VNVNew  VPVExit  "
-			[?@]13,9  "VQVPrev VWVNext   "
+			[?@]13,7 "VNVNew            "
+			[?@]13,9 "VQVPrev VWVNext   "
 			[?@]13,11 "VAVP 4x VSVN 4x   "
 			[?@]13,13 "VZVSrtVXVMidVCVEnd"
 			[?@]13,15 "V1-8VChange Colors"
@@ -242,8 +196,8 @@ return
 
 		if cursorY + (cursorSize - 2) > 101 then adjustX = 8 :adjustY = 23 + (cursorY + (cursorSize - 2)) - 103
 		if cursorX + adjustX > 95 then adjustY = 200
-		vpoke 6912,cursorY - 1 :vpoke 6913,cursorX
-		vpoke 6916,adjustY + 1 :vpoke 6917,adjustX + cursorX
+		vpoke 6912,cursorY - 1  :vpoke 6913,cursorX
+		vpoke 6916,adjustY + 1  :vpoke 6917,adjustX + cursorX
 		vpoke 6920,167 :vpoke 6921,142 * regionStart / gameLength + 105
 		vpoke 6928,167 :vpoke 6929,(142 * regionStart / gameLength) + 105 + (100800! / gameLength)
 
@@ -273,7 +227,15 @@ return
 			if a$ = chr$(&h1f) and cursorY + spriteStep < 103 then _
 				cursorY = cursorY + spriteStep :cursorPos = cursorPos + spriteStep :gosub {move_scan_sprite}
 
-			if a$ = "P" then gosub {window_requester} :close :clear :screen 0 :width 40 :color 15,5,5 :new
+			if a$ = "P" then _
+				screen 0 :width 40:
+				close:
+				print gameName$ + " closed":
+				print :print :print:
+				print "ENTER to open another file ";:
+				line input a$:
+				run
+			endif
 
 			if a$ = " " then gosub {change_movement_step}
 			if a$ = "D" then gosub {change_sprite_size}
@@ -299,13 +261,11 @@ return
 			if a$ = "W" then [disp cursor] :regionStart = regionStart + regionStep :gosub {update_memory_position}
 			if a$ = "A" then [disp cursor] :regionStart = regionStart - regionStep * 4 :gosub {update_memory_position}
 			if a$ = "S" then [disp cursor] :regionStart = regionStart + regionStep * 4 :gosub {update_memory_position}
-			if a$ = "Z" then [disp cursor] :regionStart = &h01 :gosub {update_memory_position}
+			if a$ = "Z" then [disp cursor] :regionStart = &h1 :gosub {update_memory_position}
 			if a$ = "X" then [disp cursor] :regionStart = (gameLength / 2) - 400 :gosub {update_memory_position}
 			if a$ = "C" then [disp cursor] :regionStart = gameLength - 800 :gosub {update_memory_position}
 
-			if a$ = "N" then gosub {window_requester} :run
-
-			if a$ = "B" then [var0],0:[var1],&h00:[var2],&h04:[var3],&h20:[var4],&h03:[fill_VRAM]
+			if a$ = "N" then gosub {new_file}
 
 			if a$ = "V" then keysPage = abs(keysPage - 1): goto {keys_page_start}
 
@@ -316,17 +276,12 @@ return
 	color2 = fn colorBase(color2)
 	color3 = fn colorBase(color3)
 	color4 = fn colorBase(color4)
-	color5 = fn colorBase(color3)
-	color6 = fn colorBase(color1)
 
 	color color2,color1,color1
-	vpoke 8194,color4 * 16 + color1								## Border character colors, blocks of 8 chars
-	vpoke 8195,color4 * 16 + color1								## Border character colors, blocks of 8 chars
-	vpoke 8192,color4 * 16 + color3 							## Lower bar character colors, blocks of 8 chars
-	vpoke 8193,color3 * 16 + color1								## Mini preview colors, blocks of 8 chars
-	vpoke 6915,color2 :vpoke 6919,color2						## Sprite colors
-	vpoke 6923,color2 :vpoke 6927,color2 :vpoke 6931,color2		## Sprite colors
-	for f = 0 to 12 :vpoke 8208+f,color3 * 16 + color1 :next	## Scan area character colors, blocks of 8 chars
+	vpoke 8194,color4 * 16 + color1 :vpoke 8195,color4 * 16 + color1								'Borders character color, blocks of 8 chars
+	vpoke 8192,color4 * 16 + color3 																'Region character colors, blocks of 8 chars
+	vpoke 6915,color2 :vpoke 6919,color2 :vpoke 6923,color2 :vpoke 6927,color2 :vpoke 6931,color2	'Sprite color
+	for f = 8208 to 8220 :vpoke f,color3 * 16 + color1 :next										'Scan area character colors, blocks of 8 chars
 return
 
 {move_scan_sprite}
@@ -343,7 +298,7 @@ return
 return
 
 {change_sprite_size}
-	if  cursorSize = 8 then cursorSize = 32 else cursorSize = 8
+	if  cursorSize = 8 then  cursorSize = 32 else  cursorSize = 8
 	
 	adjustY = cursorY + (cursorSize - 2) :adjustX = 0
 	if cursorY + (cursorSize - 2) > 101 then adjustX = 8 :adjustY = 23 + (cursorY + (cursorSize - 2)) - 103
@@ -375,15 +330,13 @@ return
 	isOverview = 0
 	[?@]2,2 "WWWSCANWWW"
 	[?@]2,13 "WVéVStopWW"
-
-	## for g = 0 to 6	## option to scan interleaved
-		## for f = regionStart+g to regionStart + 799 step 7
-		for f = regionStart to regionStart + 799
-			vpoke 1024 - regionStart + f,vpeek(1024 - regionStart + f) xor 255:
-			get #1,f :a$ = bytes$:
-			vpoke 1024 - regionStart + f,asc(a$):
-			if inkey$=" " then {end_scan} else _
-		next
+	for f = regionStart to regionStart + 799:
+		vpoke 1024 - regionStart + f,0:
+		get #1,f:
+		a$ = bytes$:
+		vpoke 1024 - regionStart + f,asc(a$):
+		if inkey$=" " then {end_scan} else _
+	next
 
 	{end_scan}
 	if haltScan = 1 then _
@@ -405,7 +358,6 @@ return
 {edit_screen}
 	cls
 	vpoke 6920,200 :vpoke 6928,200
-	[var0],&h00:[var1],&h40:[var2],&h00:[var3],&h20:[var4],&h00:[fill_VRAM]
 
 	[?@]0,0  "        CHANGE GRAPH KIT        "
 	[?@]1,2 "XWWWWWWWWWWY"
@@ -424,10 +376,12 @@ return
 	[?@]1,17 "C"
 	[?@]3,17 string$(4-len(hex$(cursorPos)),"0")+hex$(cursorPos)
 	[?@]8,17 string$(4-len(hex$(cursorPos + ( cursorSize - 1))),"0")+hex$(cursorPos + ( cursorSize - 1))
-	[?@]1,19 "XWWRWWWWRWWY"
-	[?@]1,20 "VHJVX  0V13V"
-	[?@]1,21 "VIKVY  0V24V"
-	[?@]1,22 "ZWWQWWWWQWW["
+	[?@]1,19 "R"
+	[?@]3,19 string$(4-len(hex$(regionStart)),"0")+hex$(regionStart)
+	[?@]8,19 string$(4-len(hex$(regionStart + 799)),"0")+hex$(regionStart + 799)
+	[?@]1,21 "G"
+	[?@]3,21 string$(4-len(hex$(1)),"0")+hex$(1)
+	[?@]8,21 string$(4-len(hex$(gameLength)),"0")+hex$(gameLength)
 	[?@]14,2 "________________"
 	[?@]14,3 "________________"
 	[?@]14,4 "________________"
@@ -445,36 +399,52 @@ return
 	[?@]14,16 "________________"
 	[?@]14,17 "________________"
 	[?@]13,19 "VEVErzVRVRldVTVInv"
-	[?@]13,21 "VéVTglVSVSavVèVBck"
-	vpoke 6924,15 :vpoke 6925,112
+	[?@]13,21 "VéVTglVPVSavVèVBck"
 
+	vpoke 6924,15 :vpoke 6925,112
 	~editX = 0 :~editY = 0 :~editType = 0
 
 	{fill_edit_area}
-		declare areaSize, finalPos, prevLen, editLin, editCol
+		declare areaSize, finalPos, pixel
+		~position = -1 :~gridX = 0 :~gridY = 0
+
+		if cursorSize = 8 then areaSize = 7 else areaSize = 15
 
 		finalPos = cursorPos + (cursorSize - 1) 'find formula to cap at gameLength to avoid next if
 		if finalPos > gameLength - 1 then finalPos = gameLength - 1
 
-		if cursorSize = 8 then _
-			areaSize = 7 :prevLen = 8 :editLin = 8 :editCol = 1:
-		else:
-			areaSize = 15 :prevLen = 32 :editLin = 16 :editCol = 2
-		endif
+		for i = cursorPos to finalPos
+			position = position + 1
 
-		if editType = 2 then [var0],&h00:[var1],&h40:[var2],&h00:[var3],prevLen:[var4],&h00:[fill_VRAM]
-		if editType = 1 then [var0],prevLen:[var1],&h40:[var2],&h00:[invert_VRAM]
-
-		if editType = 0 then _
-			for i = cursorPos to finalPos:
-				get #1,i:
-				vpoke 1024 - regionStart + i,vpeek(1024 - regionStart + i) xor 255:
+			if editType = 0 then get #1,i:
 				a$ = bytes$:
-				vpoke &h0040 + i - cursorPos,asc(a$):
-				vpoke 1024 - regionStart + i,asc(a$):
+				~bitFull$ = string$(8-len(bin$(asc(a$))),"0") + bin$(asc(a$)):
+				vpoke 1024 - regionStart + i,asc(a$)
+			endif
+
+			if position > 15 then gridX = 8 :gridY = -16
+
+			for f = 1 to 8
+
+				if editType = 2 then pixel = 16
+
+				if editType = 0 then _
+					if mid$(bitFull$,f,1) = "0" then _
+						pixel = 16 else _
+						pixel = 228
+					endif
+				endif
+
+				if editType = 1 then _
+					if vpeek ((gridX + 13 + f) + (gridY + 2 + position) * 32 + 6144) = 16 then _
+						pixel = 228 else _
+						pixel = 16
+					endif
+				endif
+
+				vpoke (gridX + 13 + f) + (gridY + 2 + position) * 32 + 6144,pixel
 			next
-		endif
-		[var0],editCol:[var1],editLin:[populate_edit]
+		next
 
 		{read_keyboard_edit}
 			a$ = inkey$
@@ -488,51 +458,44 @@ return
 			if a$ = "R" then editType = 0 :goto {fill_edit_area}
 			if a$ = "T" then editType = 1 :goto {fill_edit_area}
 			if a$ = " " then gosub {change_bit}
-			if a$ = "S" then gosub {save_drawing}
-
-			if a$ = "1" then color5 = color5 - 1 :gosub {set_minipreview_color}
-			if a$ = "2" then color5 = color5 + 1 :gosub {set_minipreview_color}
-			if a$ = "3" then color6 = color6 - 1 :gosub {set_minipreview_color}
-			if a$ = "4" then color6 = color6 + 1 :gosub {set_minipreview_color}
+			if a$ = "P" then gosub {save_drawing}
 
 			if a$ = chr$(13) then vpoke 6924,200 :goto {search_screen}
 
 		goto {read_keyboard_edit}
 
-{set_minipreview_color}
-	color5 = fn colorBase(color5)
-	color6 = fn colorBase(color6)
-	vpoke 8193,color5 * 16 + color6	
-return
-
 {move_cursor}
 	vpoke 6924,15 + (editY * 8) :vpoke 6925,112 + (editX * 8)
-	[?@]7,20 using "##";editX :[?@]7,21 using "##";editY
 return
 
 {change_bit}
-	~pixel = vpeek ((editX + 14) + (editY + 2) * 32 + 6144)
+	pixel = vpeek ((editX + 14) + (editY + 2) * 32 + 6144)
 	pixel = (228 + 16) - pixel
 	vpoke (editX + 14) + (editY + 2) * 32 + 6144,pixel
-
-	~posY = editY: if editX > 7 then posY = editY + 16
-	vpoke &h0040 + posY,2^(7-(editX mod 8)) xor vpeek(&h0040 + posY)
 return
 
 {save_drawing}
+	~position = -1 :~gridX = 0 :~gridY = 0
+
 	finalPos = cursorPos + (cursorSize - 1) 'find formula to cap at gameLength to avoid next if
 	if finalPos > gameLength - 1 then finalPos = gameLength - 1
 
 	for i = cursorPos to finalPos
-		~scanPos = 1024 - regionStart + i
-		~previewByte = vpeek(&h0040 + i - cursorPos)
-
-		vpoke scanPos,vpeek(scanPos) xor 255
-
-		a$ = chr$(previewByte)
+		position = position + 1
+		if position > 15 then gridX = 8 :gridY = -16
+	
+		~bitPos = 128 :~byteDecimal = 0
+		for f = 1 to 8
+			if vpeek ((gridX + 13 + f) + (gridY + 2 + position) * 32 + 6144) = 16 then _
+				g$ = "0" else _
+				g$ = "1"
+			endif
+			byteDecimal = val(g$) * bitPos + byteDecimal :bitPos = bitPos / 2
+		next
+	
+		a$ = chr$(byteDecimal)
 		lset bytes$ = a$ :put #1,i
-
-		vpoke scan_pos,previewByte
+		vpoke 1024 - regionStart + i,byteDecimal
 	next
 return
 
@@ -617,7 +580,7 @@ return
 
 		for f = 1 to lastSlice step sliceSize
 			for i = f to f + 7
-				vpoke 1024 + bytePos,vpeek(1024 + bytePos) xor 255
+				vpoke 1024 + bytePos,0
 				get #1,i
 				a$ = bytes$
 				vpoke 1024 + bytePos,asc(a$)
@@ -643,28 +606,47 @@ return
 		return
 end
 
-{window_requester}
-	[var0],&h60:[var1],&h00:[var2],&h40:[var3],&h19:[copy_from_VRAM]
+{character_shapes}
+	data 4,4,36,100,252,96,32,0
+	data 0,0,219,154,82,211,0,0
+	data 231,195,165,24,24,165,195,231
+	data 255,128,128,128,128,128,128,255
+	data 255,0,0,0,0,0,0,255
+	data 255,1,1,1,1,1,1,255
+	data 0,126,126,126,126,126,126,0
+	data 255,129,129,129,129,129,129,255
+	data 255,255,255,255,255,255,255,255
+
+{sprite_shapes}
+	data 255,129,0,0,0,0,0,0
+	data 129,255,0,0,0,0,0,0
+	data 0,128,128,128,128,128,128,0
+	data 255,129,129,129,129,129,129,255
+
+{new_file}
+	for f = 5 to 25
+		get_area(f - 5,0) = vpeek(&h1800 + f + 32 * 10)
+		get_area(f - 5,1) = vpeek(&h1800 + f + 32 * 11)
+		get_area(f - 5,2) = vpeek(&h1800 + f + 32 * 12)
+	next
 	[?@]5,10 "XWWWWWWWWWWWWWWWWWWWY"
 	[?@]5,11 "VAre you sure? (Y/N)V"
 	[?@]5,12 "ZWWWWWWWWWWWWWWWWWWW[
 	a$ = inkey$: if a$ <> "Y" and a$ <> "N" then {@}
-	if a$ = "Y" then return
-	[var0],&h60:[var1],&h00:[var2],&h40:[var3],&h19:[copy_to_VRAM]
-return {read_keyboard_main}
+	if a$ = "Y" then run
+	for f = 5 to 25
+		vpoke &h1800 + f + 32 * 10,get_area(f-5,0)
+		vpoke &h1800 + f + 32 * 11,get_area(f-5,1)
+		vpoke &h1800 + f + 32 * 12,get_area(f-5,2)
+	next
+	return
 
 {error}
 	if (err = 53 and error_type = 1) or err = 70 then goto {file_not_found}
 	if err = 53 and error_type = 2 then goto {input_past_end}
 	if err = 56 and error_type = 2 then error_type = 3: goto {input_past_end}
-	~errorNum = err :if errorNum > 25 then errorNum = errorNum - 24
-	for f = errorM(errorNum) to errorM(errorNum + 1):
-		print chr$(peek(&h3D75 + f));:
-	next
-	print " at"; erl
-{stopped}
-	close
-end
+	print err; "at line "; erl
+stop
 
 {file_not_found}
 	print:print "No files found"
@@ -672,7 +654,7 @@ end
 	a$ = inkey$ :if a$ = " " then print else {@} 
 	error_type = 0
 	cls
-resume {insert_disk}
+	resume {insert_disk}
 on error goto 0
 
 {input_past_end}
@@ -682,140 +664,26 @@ on error goto 0
 	print:print "Press space to restart"
 	a$ = inkey$ :if a$ = " " then print else {@}
 	error_type = 0
-resume {insert_disk}
+	resume {insert_disk}
 on error goto 0
 
-' ML Routines
-                     ## At 0xd000
-data 00,00,00,00         ## DB   0x0,0x0,0x0,0x0   ; pokable   0xd000-0xd003
-data 00,00,00,00         ## DB   0x0,0x0,0x0,0x0   ; variables 0xd004-0xd007
-                     ## START    
-data C3,17,D0            ## JP   fill_VRAM   ; addr 0xd008
-data C3,25,D0            ## JP   invert_VRAM   ; arrr 0xd00b
-data C3,38,D0            ## JP   copy_to_VRAM   ; addr 0xd00e
-data C3,47,D0            ## JP   copy_from_VRAM   ; addr 0xd011
-data C3,55,D0            ## JP   populate_edit   ; addr 0xd014
-                     ## FILL_VRAM   
-data 3A,00,D0            ## LD   a,(var+0)   ; pattern to fill
-data 2A,01,D0            ## LD   hl,(var+1)   ; start of block
-data ED,4B,03,D0         ## LD   bc,(var+3)   ; length of block
-data CD,56,00            ## CALL FILVRM   ; fill vram
-data C9                  ## RET   
-                     ## INVERT_VRAM   
-data 3A,00,D0            ## LD   a,(var+0)   ; numb of iterations
-data 47                  ## LD   b,a   
-data 2A,01,D0            ## LD   hl,(var+1)   ; VRAM pos
-                     ## AGAIN_INV   
-data CD,4A,00            ## CALL  RDVRM   ; Read from VRAM
-data EE,FF               ## XOR   0xff   
-data CD,4D,00            ## CALL  WRTVRM   ; Write to VRAM
-data 23                  ## INC   hl   
-data 10,F5               ## DJNZ  again_inv   
-data C9                  ## RET   
-                     ## COPY_TO_VRAM   
-data ED,4B,00,D0         ## LD   bc,(var+0)   ; length
-data ED,5B,02,D0         ## LD   de,(var+2)   ; to vram
-data 21,92,D0            ## LD   hl,ram_save   ; from memory
-data CD,5C,00            ## CALL LDIRVM   ; Block to VRAM
-data C9              ## RET   
-                         ## COPY_FROM_VRAM   
-data ED,4B,00,D0         ## LD   bc,(var+0)   ; length
-data 11,92,D0            ## LD   de,ram_save   ; to memory
-data 2A,02,D0            ## LD   hl,(var+2)   ; from vram
-data CD,59,00            ## CALL LDIRMV   ; Read from VRAM
-data C9                  ## RET   
-                     ## POPULATE_EDIT   
-data 11,40,00            ## LD   de,0x0040   ; mini preview chars start
-data 21,4E,18            ## LD   hl,0x184e   ; edit block screen pos
-data 3A,00,D0            ## LD   a,(var+0)   ; edit block columns
-data 47                  ## LD   b,a   
-                     ## LOOPL    
-data C5                  ## PUSH bc   
-data 3A,01,D0            ## LD   a,(var+1)   ; edit block lines
-data 47                  ## LD   b,a   
-                     ## LOOPY    
-data C5                  ## PUSH bc   
-data E5                  ## PUSH hl   
-data D5                  ## PUSH de   
-data E1                  ## POP  hl   
-data CD,4A,00            ## CALL RDVRM   ; Read from VRAM
-data E5                  ## PUSH hl   
-data D1                  ## POP  de   
-data E1                  ## POP  hl   
-data 06,08               ## LD   b,8   ; number of bytes
-                         ## LOOPX    
-data 17                  ## RLA   
-data F5              ## PUSH af   
-data 38,1A               ## JR   c,printONE   
-data 3E,10               ## LD   a,16   ; 0 bit char
-                     ## CONT     
-data CD,4D,00            ## CALL WRTVRM   ; Write to VRAM
-data F1                  ## POP  af   
-data 23                  ## INC  hl   
-data 10,F3               ## DJNZ loopX   
-data C1                  ## POP  bc   
-data 13                  ## INC  de   
-data D5                  ## PUSH de   
-data 11,18,00            ## LD   de,24   ; next line
-data 19                  ## ADD  hl,de   
-data D1                  ## POP  de   
-data 10,DD               ## DJNZ loopY   
-data 21,56,18            ## LD   hl,0x1856   ; second col pos
-data C1                  ## POP  bc   
-data 10,D2               ## DJNZ loopL   
-data C9                  ## RET   
-                     ## PRINTONE   
-data 3E,E4               ## LD   a,228   ; 1 bit char
-data 18,E4               ## JR   cont   
-
-
-' Error Messages in ROM
-{portuguese_ROM}
-data 0,13,26,43,52,66,75,89,110,132,147
-data 164,178,192,210,223,239,253,271,287
-data 304,311,328,344,359,371,383,396,410
-data 429,444,459,475,501,520,531
-{english_ROM}
-data 0,17,30,51,63,85,94,108,130,153,173
-data 190,205,219,239,255,282,297,321,338
-data 351,361,382,400,416,437,452,467,483
-data 498,516,531
-
-' Character Shapes
-{character_shapes}
-data 255,128,128,128,128,128,128,255
-data 255,0,0,0,0,0,0,255
-data 255,1,1,1,1,1,1,255
-data 255,129,129,129,129,129,129,255
-data 255,255,255,255,255,255,255,255
-data 0,126,126,126,126,126,126,0
-data 4,4,36,100,252,96,32,0
-data 0,0,219,154,82,211,0,0
-data 231,195,165,24,24,165,195,231
-
-' Sprite Shapes
-data 255,129,0,0,0,0,0,0
-data 129,255,0,0,0,0,0,0
-data 0,128,128,128,128,128,128,0
-data 255,129,129,129,129,129,129,255
-
-' Functions Not Used
-' Create Character Block
-c=127
-for x=2 to 11
-	for y=3 to 12
-		c=c+1
-		:[?@]x,y:print chr$(c)
+{functions_not_used}
+{create_character_block}
+	c=127
+	for x=2 to 11
+		for y=3 to 12
+			c=c+1
+			:[?@]x,y:print chr$(c)
+		next
 	next
-next
 end
 
-' Character Map
-for i=0 to 255
-	x=i mod 32: y=i\32
-	c=i
-	if c<32 or c=127 then c=32
-	[?@]x,y chr$(c)
-	[?@]x,y+10 chr$(1)+chr$(c)
-next
+{character_map}
+	for i=0 to 255
+		x=i mod 32: y=i\32
+		c=i
+		if c<32 or c=127 then c=32
+		[?@]x,y chr$(c)
+		[?@]x,y+10 chr$(1)+chr$(c)
+	next
 end
