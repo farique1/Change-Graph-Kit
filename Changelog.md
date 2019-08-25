@@ -3,10 +3,10 @@
 ## **v1.4.0**  
 ***24-8-2019***  
 - ML Routines.  
- - Quickly clear the scan area.  
- - Show and erase window requester.  
- - Erase and invert the mini preview.  
- - Refresh the edit area with the mini preview data.  
+- - Quickly clear the scan area.  
+- - Show and erase window requester.  
+- - Erase and invert the mini preview.  
+- - Refresh the edit area with the mini preview data.  
 - Faster save using the mini preview data.  
 - Multi purpose window requester.  
 - Edit screen mini preview with independent colors.  
