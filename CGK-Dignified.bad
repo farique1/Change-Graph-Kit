@@ -17,7 +17,7 @@
 '   Cursor cannot go or stay beyond game length anymore
 '   Files now have a minimum limit of 800 bytes to be loaded
 '   Fixed bug (bad coding) leaking memory on the overview display
-'	Converted 0 - 1 variables to the new Dignified TRUE - FALSE
+'   Converted 0 - 1 variables to the new Dignified TRUE - FALSE
 '   Small code optimizations
 '
 ' Copyright (1984 - 2019) - Fred Rique (farique)
