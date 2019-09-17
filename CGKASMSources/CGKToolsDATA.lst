@@ -1,0 +1,146 @@
+                        ; --------------------------------------
+                        ; zasm: assemble "CGKToolsDATA.asm"
+                        ; date: 2019-09-05 12:52:02
+                        ; --------------------------------------
+
+
+                        ; CGK Support Routines
+                        ; To use on the DATA lines inside the program
+                        ; 16bit reg variables in little endian
+                        
+004A:                   RDVRM:	equ 0x004A	; read from VRAM
+004D:                   WRTVRM:	equ 0x004d	; write to VRAM
+0056:                   FILVRM:	equ 0x0056	; fill vram area
+0059:                   LDIRMV:	equ 0x0059	; copy from VRAM
+005C:                   LDIRVM:	equ 0x005C	; copy to VRAM
+0040:                   VRAMCHAR	equ 0x0040	; characters to modify 
+184E:                   EDTBLKPOS:	equ 0x184e	; top left pos of the edit block
+                        		; mini preview: hl=0x0040 bc=0x0020
+                        		; scan area: hl=0x0400 bc=0x0320
+                        		; wind req: len=0x0060 vram=0x1940 mem=ram_save
+DA00:                   		org 0xda00
+DA00:                   var:
+DA00: 00000000          		db 0x0,0x0,0x0,0x0	; pokable   0xd000-0xd003
+DA04: 00000000          		db 0x0,0x0,0x0,0x0	; variables 0xd004-0xd007
+DA08:                   start:
+DA08: C314DA   [10]     		jp invert_VRAM	; 08 v0-v1=len v2-v3=srt usr(ptrn)
+DA0B: C327DA   [20]     		jp fill_VRAM	; 0b v0=len
+DA0E: C335DA   [30]     		jp copy_VRAM	; 0e v0-v1=strt v2-3=len usr(direc)
+DA11: C35ADA   [40]     		jp populate_edit	; 11 v0=col_len v1=lin_len
+                        		
+DA14:                   invert_VRAM:
+DA14: 3A00DA   [13]     		ld a,(var+0)		; get the length
+DA17: 47       [17]     		ld b,a			; b=a
+DA18: 214000   [27]     		ld hl,VRAMCHAR		; the VRAM start pos
+DA1B:                   invert_loop:	
+DA1B: CD4A00   [17]     		call RDVRM			; read from VRAM
+DA1E: EEFF     [24]     		xor 0xff			; invert the bits
+DA20: CD4D00   [41]     		call WRTVRM			; write to VRAM
+DA23: 23       [47]     		inc hl			; increment the VRAM pos
+DA24: 10F5     [55|60]  		djnz invert_loop		; do until end of length
+DA26: C9       [65]     		ret				; exit
+                        
+DA27:                   fill_VRAM:	
+DA27: 3AF8F7   [13]     	      ld a,(0xF7F8)		; get USR argument (int var)
+DA2A: ED4B00DA [33]     		ld bc,(var+0)		; length to fill
+DA2E: 2A02DA   [49]     		ld hl,(var+2)		; the VRAM start pos
+DA31: CD5600   [66]     		call FILVRM			; fill the VRAM
+DA34: C9       [76]     		ret				; exit
+                        
+DA35:                   copy_VRAM:		
+DA35: 3AF8F7   [13]     	      ld a,(0xF7F8)		; get USR argument (int var)
+DA38: FE00     [20]     		cp 0x00			; see if it is 0
+DA3A: CA4CDA   [30|30]  		jp z, copy_from_VRAM	; if yes, go read from VRAM
+DA3D:                   copy_to_VRAM:
+DA3D: ED4B02DA [20]     		ld bc,(var+2)		; get the length
+DA41: ED5B00DA [40]     		ld de,(var+0)		; get the VRAM position
+DA45: 2193DA   [50]     		ld hl,ram_save		; get the MEM position
+DA48: CD5C00   [67]     		call LDIRVM			; copy to VRAM
+DA4B: C9       [77]     		ret				; exit
+DA4C:                   copy_from_VRAM:
+DA4C: ED4B02DA [20]     		ld bc,(var+2)		; get the length
+DA50: 1193DA   [30]     		ld de,ram_save		; get the MEM position
+DA53: 2A00DA   [46]     		ld hl,(var+0)		; get the VRAM position
+DA56: CD5900   [63]     		call LDIRMV			; read the VRAM
+DA59: C9       [73]     		ret				; exit
+                        		
+DA5A:                   populate_edit:
+DA5A: 114000   [10]     		ld de,VRAMCHAR		; pos of 1st byte to read
+DA5D: 214E18   [20]     		ld hl,EDTBLKPOS		; edit block top left pos
+DA60: 3A00DA   [33]     		ld a,(var+0)		; edit block columns length
+DA63: 47       [37]     		ld b,a			; b=a
+DA64:                   pop_loopL:					; do the columns
+DA64: C5       [11]     		push bc			; save the columns number
+DA65: 3A01DA   [24]     		ld a,(var+1)		; edit block lines length
+DA68: 47       [28]     		ld b,a			; b=a
+DA69:                   pop_loopY:					; do the lines
+DA69: C5       [11]     		push bc			; save the lines number
+DA6A: EB       [15]     		ex de,hl			; put the VRAM pos in hl
+DA6B: CD4A00   [32]     		call RDVRM			; get 1st VRAM byte (hl to a)
+DA6E: EB       [36]     		ex de,hl			; get the edit pos back in hl
+DA6F: 0608     [43]     		ld b,0x08			; number of bits to process
+DA71:                   pop_loopX:					; do the bits
+DA71: 17       [ 4]     		rla				; put the left bit on the carrier
+DA72: F5       [15]     		push af			; save the byte being read
+DA73: 381A     [22|27]  		jr c,pop_ONE		; if the bit is 1, get its char
+DA75: 3E10     [29]     		ld a,0x10			; else get the 0 bit character
+DA77:                   pop_cont:	
+DA77: CD4D00   [17]     		call WRTVRM			; put it on the screen
+DA7A: F1       [27]     		pop af			; get the byte being read back
+DA7B: 23       [33]     		inc hl			; increment the edit block X pos
+DA7C: 10F3     [41|46]  		djnz pop_loopX		; do until the byte is finished
+                        	
+DA7E: 13       [47]     		inc de			; increment the byte to read pos
+DA7F: D5       [58]     		push de			; save the byte to read pos
+DA80: 111800   [68]     		ld de,0x18			; jump edit blk pos to next line
+DA83: 19       [79]     		add hl,de			; send it to hl
+DA84: D1       [89]     		pop de			; get back the byte to read pos
+DA85: C1       [99]     		pop bc			; get the lines number back
+DA86: 10E1     [107|112]		djnz pop_loopY		; do until there are lines to do
+                        	
+DA88: 215618   [117]    		ld hl,EDTBLKPOS+8		; edit block 2dn column pos
+DA8B: C1       [127]    		pop bc			; get back edit block col length
+DA8C: 10D6     [135|140]		djnz pop_loopL		; if more than 1, do another
+DA8E: C9       [145]    		ret				; exit
+DA8F:                   pop_ONE:	
+DA8F: 3EE4     [ 7]     		ld a,228			; get the 1 bit character
+DA91: 18E4     [19]     		jr pop_cont			; return 
+                        		
+DA93:                   ram_save:
+DA93: 00                		db 0x0
+
+
+; +++ segments +++
+
+#CODE          = $DA00 = 55808,  size = $0094 =   148
+
+; +++ global symbols +++
+
+EDTBLKPOS      = $184E =  6222          CGKToolsDATA.asm:11
+FILVRM         = $0056 =    86          CGKToolsDATA.asm:7
+LDIRMV         = $0059 =    89          CGKToolsDATA.asm:8
+LDIRVM         = $005C =    92          CGKToolsDATA.asm:9
+RDVRM          = $004A =    74          CGKToolsDATA.asm:5
+VRAMCHAR       = $0040 =    64          CGKToolsDATA.asm:10
+WRTVRM         = $004D =    77          CGKToolsDATA.asm:6
+_end           = $DA94 = 55956          CGKToolsDATA.asm:14 (unused)
+_size          = $0094 =   148          CGKToolsDATA.asm:14 (unused)
+copy_VRAM      = $DA35 = 55861          CGKToolsDATA.asm:44
+copy_from_VRAM = $DA4C = 55884          CGKToolsDATA.asm:54
+copy_to_VRAM   = $DA3D = 55869          CGKToolsDATA.asm:48 (unused)
+fill_VRAM      = $DA27 = 55847          CGKToolsDATA.asm:37
+invert_VRAM    = $DA14 = 55828          CGKToolsDATA.asm:25
+invert_loop    = $DA1B = 55835          CGKToolsDATA.asm:29
+pop_ONE        = $DA8F = 55951          CGKToolsDATA.asm:99
+pop_cont       = $DA77 = 55927          CGKToolsDATA.asm:81
+pop_loopL      = $DA64 = 55908          CGKToolsDATA.asm:66
+pop_loopX      = $DA71 = 55921          CGKToolsDATA.asm:76
+pop_loopY      = $DA69 = 55913          CGKToolsDATA.asm:70
+populate_edit  = $DA5A = 55898          CGKToolsDATA.asm:61
+ram_save       = $DA93 = 55955          CGKToolsDATA.asm:103
+start          = $DA08 = 55816          CGKToolsDATA.asm:19 (unused)
+var            = $DA00 = 55808          CGKToolsDATA.asm:16
+
+
+total time: 0.0022 sec.
+no errors

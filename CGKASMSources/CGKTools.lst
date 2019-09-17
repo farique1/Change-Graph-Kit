@@ -1,0 +1,413 @@
+                        ; --------------------------------------
+                        ; zasm: assemble "main.asm"
+                        ; date: 2019-09-05 12:35:36
+                        ; --------------------------------------
+
+
+                        ; CGK Support Routines
+                        ; 16bit pokable variables in little endian
+                        ; /Users/Farique/Desktop/Projects/Assembly/zasm/zasm  -uwy ./cgksources/main.asm ./diskasm/main.bin 
+                        
+004A:                   RDVRM		equ 0x004A	; read from VRAM
+004D:                   WRTVRM:	equ 0x004d	; write to VRAM
+0056:                   FILVRM:	equ 0x0056	; fill vram area
+0059:                   LDIRMV:	equ 0x0059	; block from VRAM
+005C:                   LDIRVM:	equ 0x005C	; block to VRAM
+0040:                   VRAMCHAR:	equ 0x0040 	; characters to modify 
+                        				; 0x0040=mini_prev 0x0208=A 0x0280=P 
+184E:                   EDTBLKPOS:	equ 0x184e	; top left pos of the edit block
+                        
+D9F9:                   		org 0xda00-7	; start memory location
+                        					; minus 7 bytes from the header 
+                        		; header
+D9F9: FE                		db 0xfe		; indicate it is a bin file
+D9FA: 00DA              		dw var		; start address
+D9FC: 3BDC              		dw _end-2		; emd address
+D9FE: 08DA              		dw start		; execute address
+DA00:                   var:
+DA00: 00000000          		db 0x00,0x00,0x00,0x00	; pokable   0xd000-0xd003
+DA04: 00000000          		db 0x00,0x00,0x00,0x00	; variables 0xd004-0xd007
+DA08:                   start:
+DA08: C31DDA   [10]     		jp invert_VRAM		; 08 v0=len
+DA0B: C330DA   [20]     		jp fill_VRAM		; 0b v0-v1=len v2-v3=srt usr(ptrn)
+DA0E: C33EDA   [30]     		jp copy_VRAM		; 0e v0-v1=VRAM v2=width v3=height usr(direc)
+DA11: C37ADA   [40]     		jp populate_edit		; 11 v0=col_len v1=lin_len
+DA14: C3B3DA   [50]     		jp flip_VRAM		; 14 v0=len
+DA17: C340DB   [60]     		jp rotate_VRAM		; 17 v0=len
+DA1A: C3BADB   [70]     		jp slide_VRAM		; 1a v0=len usr(direc)
+                        
+                        #include "invertFill.asm"
+                        ; mini preview:	length / bc / var+3 = 0x0020
+                        ;			start / hl / var+1 = 0x0040
+                        ; scan area:	length / bc / var+3 = 0x0320
+                        ;			start / hl / var+1 = 0x0400
+                        ; wind req:		length / bc / var+0 = 0x0060
+                        ;			VRAM start / var+2 = 0x1940
+DA1D:                   invert_VRAM:
+DA1D: 3A00DA   [13]     		ld a,(var+0)		; get the length
+DA20: 47       [17]     		ld b,a			; b=a
+DA21: 214000   [27]     		ld hl,VRAMCHAR		; the VRAM start pos
+DA24:                   invert_loop:	
+DA24: CD4A00   [17]     		call RDVRM			; read from VRAM
+DA27: EEFF     [24]     		xor 0xff			; invert the bits
+DA29: CD4D00   [41]     		call WRTVRM			; write to VRAM
+DA2C: 23       [47]     		inc hl			; increment the VRAM pos
+DA2D: 10F5     [55|60]  		djnz invert_loop		; do until end of length
+DA2F: C9       [65]     		ret				; exit
+                        			
+DA30:                   fill_VRAM:	
+DA30: 3AF8F7   [13]     	      ld a,(0xF7F8)		; get USR argument (int var)
+DA33: ED4B00DA [33]     		ld bc,(var+0)		; length to fill
+DA37: 2A02DA   [49]     		ld hl,(var+2)		; the VRAM start pos
+DA3A: CD5600   [66]     		call FILVRM			; fill the VRAM
+DA3D: C9       [76]     		ret				; exit
+                        #include "copy.asm"
+DA3E:                   copy_VRAM:
+DA3E: 3AF8F7   [13]     	      ld a,(0xF7F8)		; get USR argument (int var)
+DA41: 3279DA   [26]     	      ld (copy_var),a		; save it
+DA44: 113CDC   [36]     		ld de,ram_save		; MEM start position
+DA47: 2A00DA   [52]     		ld hl,(var+0)		; VRAM screen position
+DA4A: 3A03DA   [65]     		ld a,(var+3)		; get the height
+DA4D: 47       [69]     		ld b,a			; b=a
+DA4E:                   copy_loopY:					; do the height
+DA4E: C5       [11]     		push bc			; save the height
+DA4F: 3A02DA   [24]     		ld a,(var+2)		; get the width
+DA52: 47       [28]     		ld b,a			; save the width
+DA53:                   copy_loopX:					; do the width
+DA53: 3A79DA   [13]     		ld a,(copy_var)		; get back the USR argument
+DA56: FE00     [20]     		cp 0x00			; see if it is 0
+DA58: CA73DA   [30|30]  		jp z, copy_read		; if yes, go read from VRAM
+DA5B: 1A       [37]     		ld a,(de)			; if not. get the char from MEM
+DA5C: CD4D00   [54]     		call WRTVRM			; put it on the screen
+DA5F:                   copy_back:	
+DA5F: 23       [ 6]     		inc hl			; increment the VRAM position
+DA60: 13       [12]     		inc de			; increment the MEM position
+DA61: 10F0     [20|25]  		djnz copy_loopX		; do until the width is reached
+                        	
+DA63: 012000   [30]     		ld bc,0x20			; get the screen width
+DA66: 09       [41]     		add hl,bc			; add to the VRAM position
+DA67: 0600     [48]     		ld b,0			; put 0 on the MSByte of bc
+DA69: 3A02DA   [61]     		ld a,(var+2)		; get the width
+DA6C: 4F       [65]     		ld c,a			; put it on the LSByte of bc
+DA6D: ED42     [80]     		sbc hl,bc			; subtract from the VRAM position
+DA6F: C1       [90]     		pop bc			; get back the height
+DA70: 10DC     [98|103] 		djnz copy_loopY		; do until the height is reached
+DA72: C9       [108]    		ret				; exit
+DA73:                   copy_read:	
+DA73: CD4A00   [17]     		call RDVRM			; read the VRAM
+DA76: 12       [24]     		ld (de),a			; put it on the MEM
+DA77: 18E6     [36]     		jr copy_back		; go back 
+DA79:                   copy_var:	
+DA79: 00                		db 0x00			; read or write
+                        #include "populateEdit.asm"
+DA7A:                   populate_edit:
+DA7A: 114000   [10]     		ld de,VRAMCHAR		; pos of 1st byte to read
+DA7D: 214E18   [20]     		ld hl,EDTBLKPOS		; edit block top left pos
+DA80: 3A00DA   [33]     		ld a,(var+0)		; edit block columns length
+DA83: 47       [37]     		ld b,a			; b=a
+DA84:                   pop_loopL:					; do the columns
+DA84: C5       [11]     		push bc			; save the columns number
+DA85: 3A01DA   [24]     		ld a,(var+1)		; edit block lines length
+DA88: 47       [28]     		ld b,a			; b=a
+DA89:                   pop_loopY:					; do the lines
+DA89: C5       [11]     		push bc			; save the lines number
+DA8A: EB       [15]     		ex de,hl			; put the VRAM pos in hl
+DA8B: CD4A00   [32]     		call RDVRM			; get 1st VRAM byte (hl to a)
+DA8E: EB       [36]     		ex de,hl			; get the edit pos back in hl
+DA8F: 0608     [43]     		ld b,0x08			; number of bits to process
+DA91:                   pop_loopX:					; do the bits
+DA91: 17       [ 4]     		rla				; put the left bit on the carrier
+DA92: F5       [15]     		push af			; save the byte being read
+DA93: 381A     [22|27]  		jr c,pop_ONE		; if the bit is 1, get its char
+DA95: 3E10     [29]     		ld a,0x10			; else get the 0 bit character
+DA97:                   pop_cont:	
+DA97: CD4D00   [17]     		call WRTVRM			; put it on the screen
+DA9A: F1       [27]     		pop af			; get the byte being read back
+DA9B: 23       [33]     		inc hl			; increment the edit block X pos
+DA9C: 10F3     [41|46]  		djnz pop_loopX		; do until the byte is finished
+                        	
+DA9E: 13       [47]     		inc de			; increment the byte to read pos
+DA9F: D5       [58]     		push de			; save the byte to read pos
+DAA0: 111800   [68]     		ld de,0x18			; jump edit blk pos to next line
+DAA3: 19       [79]     		add hl,de			; send it to hl
+DAA4: D1       [89]     		pop de			; get back the byte to read pos
+DAA5: C1       [99]     		pop bc			; get the lines number back
+DAA6: 10E1     [107|112]		djnz pop_loopY		; do until there are lines to do
+                        	
+DAA8: 215618   [117]    		ld hl,EDTBLKPOS+8		; edit block 2dn column pos
+DAAB: C1       [127]    		pop bc			; get back edit block col length
+DAAC: 10D6     [135|140]		djnz pop_loopL		; if more than 1, do another
+DAAE: C9       [145]    		ret				; exit
+DAAF:                   pop_ONE:	
+DAAF: 3EE4     [ 7]     		ld a,228			; get the 1 bit character
+DAB1: 18E4     [19]     		jr pop_cont			; return
+                        #include "flip.asm"
+DAB3:                   flip_VRAM:
+DAB3: 3A3FDB   [13]     		ld a,(flip_var)		; get the status variable
+DAB6: EEFF     [20]     		xor 0xff			; invert
+DAB8: 323FDB   [33]     		ld (flip_var),a		; save
+DABB: CA03DB   [43|43]  		jp z,flip_V			; if zero do vert else do horz
+DABE:                   flip_H:	
+DABE: 214000   [10]     		ld hl,VRAMCHAR		; get VRAM start
+DAC1: 3A00DA   [23]     		ld a,(var+0)		; get total byte length
+DAC4: 47       [27]     		ld b,a			; b=a
+DAC5:                   flip_H_byte:	
+DAC5: C5       [11]     		push bc			; save total byte length
+DAC6: 0608     [18]     		ld b,0x08			; number of bits to cycle
+DAC8: CD4A00   [35]     		call RDVRM			; VRAM hl(VRAMCHAR) to a
+DACB: 57       [39]     		ld d,a			; b=a
+DACC:                   flip_bitloop:	
+DACC: CB12     [ 8]     		rl d				; drop a bit from the left of b
+DACE: 1F       [12]     		rra				; and insert to the right of a
+DACF: 10FB     [20|25]  		djnz flip_bitloop		; do this 8(b) times
+DAD1: CD4D00   [37]     		call WRTVRM			; then done put a into VRAM hl(VRAMCHAR)
+DAD4: 23       [43]     		inc hl			; increment the byte location
+DAD5: C1       [53]     		pop bc			; get total byte length back
+DAD6: 10ED     [61|66]  		djnz flip_H_byte		; do this (var+0)(b) times
+DAD8: 3A00DA   [74]     		ld a,(var+0)		; get total byte length
+DADB: FE08     [81]     		cp 0x08			; see if it is 8
+DADD: C8       [86|92]  		ret z				; if yes, exit
+                        						; if not, do the character swap
+DADE: 012000   [96]     		ld bc,0x0020		; length of all 4 characters
+DAE1: 113CDC   [106]    		ld de,ram_save		; MEM save location
+DAE4: 214000   [116]    		ld hl,VRAMCHAR		; VRAM get location
+DAE7: CD5900   [133]    		call LDIRMV			; copy VRAM to MEM
+DAEA: 011000   [143]    		ld bc,0x0010		; length of 2 characters
+DAED: 115000   [153]    		ld de,VRAMCHAR+0x10	; VRAM location of 2nd set of chars
+DAF0: 213CDC   [163]    		ld hl,ram_save		; MEM location of 1st set of 2 chars
+DAF3: CD5C00   [180]    		call LDIRVM			; put MEM 1st set into VRAM 2nd set
+DAF6: 011000   [190]    		ld bc,0x0010		; length of 2 chars (LDIRVM destroys bc)
+DAF9: 114000   [200]    		ld de,VRAMCHAR 		; VRAM location of 1st set of chars 
+DAFC: 214CDC   [210]    		ld hl,ram_save+0x10	; MEM location of 2nd set of 2 chars
+DAFF: CD5C00   [227]    		call LDIRVM			; put MEM 2nd set into VRAM 1st set
+DB02: C9       [237]    		ret	
+DB03:                   flip_V:	
+DB03: 012000   [10]     		ld bc,0x0020		; get the length of bytes
+DB06: 113CDC   [20]     		ld de,ram_save		; get the MEM position
+DB09: 214000   [30]     		ld hl,VRAMCHAR		; get the VRAM position
+DB0C: CD5900   [47]     		call LDIRMV			; put VRAM chars on MEM
+DB0F: 214000   [57]     		ld hl,VRAMCHAR		; VRAM position again (LDIRMV destroys)
+DB12: 0608     [64]     		ld b,0x08			; the length of a character
+DB14: 1143DC   [74]     		ld de,ram_save+0x07	; MEM pos of the char's last byte
+DB17: 3A00DA   [87]     		ld a,(var+0)		; get the intended total length of bytes
+DB1A: FE08     [94]     		cp 0x08			; if it is 8
+DB1C: CA27DB   [104|104]		jp z,flip_V_loop		; jump ahead with the previous data
+DB1F: 114BDC   [114]    		ld de,ram_save+0x0f	; MEM pos of the 2nd char last byte
+DB22: 0602     [121]    		ld b,0x02
+DB24:                   flip_V_full:
+DB24: C5       [11]     		push bc
+DB25: 0610     [18]     		ld b,0x10			; else get the length of 2 characters
+DB27:                   flip_V_loop:
+DB27: 1A       [ 7]     		ld a,(de)			; put the last byte in a
+DB28: CD4D00   [24]     		call WRTVRM			; write to VRAM pos hl - VRAMCHAR
+DB2B: 23       [30]     		inc hl			; increment the VRAM position
+DB2C: 1B       [36]     		dec de	 		; decrement the MEM position
+DB2D: 10F8     [44|49]  		djnz flip_V_loop		; do until the char or chars are done
+DB2F: 3A00DA   [57]     		ld a,(var+0)		; get the intended total length of bytes 
+DB32: FE08     [64]     		cp 0x08			; see if it is 8
+DB34: C8       [69|75]  		ret z				; if yes, exit
+                        
+DB35: 215000   [79]     		ld hl,VRAMCHAR+0x10	; VRAM pos of the 3rd char 1st byte
+DB38: 115BDC   [89]     		ld de,ram_save+0x1f	; MEM pos of the 4th char last byte
+DB3B: C1       [99]     		pop bc
+DB3C: 10E6     [107|112]		djnz flip_V_full
+DB3E: C9       [117]    		ret
+DB3F:                   flip_var:	
+DB3F: 00                		db 0x00			; flip H or V
+                        #include "rotate.asm"
+DB40:                   rotate_VRAM:
+DB40: 214000   [10]     		ld hl,VRAMCHAR		; pos of 1st byte to read
+DB43: 1608     [17]     		ld d,0x08			; amount of bytes per turn
+DB45: 1E04     [24]     		ld e,0x04			; number of characters
+DB47:                   rotate:
+DB47: 0608     [ 7]     		ld b,0x08			; number of bits to process
+DB49: E5       [18]     		push hl			; save the VRAM position
+DB4A: CD4A00   [35]     		call RDVRM			; get 1st byte of the char
+DB4D: 2AB8DB   [51]     		ld hl,(rotate_ram_sv)	; get the MEM save position
+DB50:                   rotate_bitloop:
+DB50: 17       [ 4]     		rla				; put the left bit on the carrier
+DB51: CB1E     [19]     		rr (hl)			; and into the 1st MEM position
+DB53: 23       [25]     		inc hl			; go to the next MEM position
+DB54: 10FA     [33|38]  		djnz rotate_bitloop	; repeat until 8 bytes got bits
+DB56: E1       [43]     		pop hl			; get back the VRAM position
+DB57: 23       [49]     		inc hl			; go to the next VRAM position
+DB58: 15       [53]     		dec d				; decrement the number of bytes
+DB59: 20EC     [60|65]  		jr nz,rotate		; if not 0 do another byte
+DB5B: 3A00DA   [73]     		ld a,(var+0)		; get the total bytes length
+DB5E: FE08     [80]     		cp 0x08			; if need to do one char
+DB60: C270DB   [90|90]  		jp nz,rotate_fillback	; if no, go do some more 
+DB63: 010800   [100]    		ld bc,0x0008		; set length to 1 character
+DB66: 213CDC   [110]    		ld hl,ram_save		; MEM location of processed char
+DB69: 114000   [120]    		ld de,VRAMCHAR		; VRAM of original char
+DB6C: CD5C00   [137]    		call LDIRVM			; replace orig char with new
+DB6F: C9       [147]    		ret				; exit
+                        
+DB70:                   rotate_fillback:				; if is more than 1 character
+DB70: E5       [11]     		push hl			; save the VRAM position
+DB71: 2AB8DB   [27]     		ld hl,(rotate_ram_sv)	; get the MEM save position
+DB74: 010800   [37]     		ld bc,0x0008		; get 8
+DB77: 09       [48]     		add hl,bc			; add to the MEM position
+DB78: 22B8DB   [64]     		ld (rotate_ram_sv),hl	; save the new MEM position
+DB7B: E1       [74]     		pop hl			; get back the VRAM position
+DB7C: 1608     [81]     		ld d,0x08			; do another character
+DB7E: 1D       [85]     		dec e				; decrease the number of chars
+DB7F: 20C6     [92|97]  		jr nz,rotate		; if not 0 go do another
+                        						; if 0
+DB81: 213CDC   [102]    		ld hl,ram_save		; get original MEM position
+DB84: 22B8DB   [118]    		ld (rotate_ram_sv),hl	; restore to enable to use again
+DB87: 010800   [128]    		ld bc,0x0008		; set length to 1 character
+DB8A: 213CDC   [138]    		ld hl,ram_save+0x00	; MEM loc of 1st altered char
+DB8D: 115000   [148]    		ld de,VRAMCHAR+0x10	; VRAM loc of 3rd char
+DB90: CD5C00   [165]    		call LDIRVM			; replace orig with new
+DB93: 010800   [175]    		ld bc,0x0008		; set length to 1 character
+DB96: 2144DC   [185]    		ld hl,ram_save+0x08	; MEM loc of 2nd altered char
+DB99: 114000   [195]    		ld de,VRAMCHAR+0x00	; VRAM loc of 1st char
+DB9C: CD5C00   [212]    		call LDIRVM			; replace orig with new
+DB9F: 010800   [222]    		ld bc,0x0008		; set length to 1 character
+DBA2: 214CDC   [232]    		ld hl,ram_save+0x10	; MEM loc of 3rd altered char
+DBA5: 115800   [242]    		ld de,VRAMCHAR+0x18	; VRAM loc of 4th char
+DBA8: CD5C00   [259]    		call LDIRVM			; replace orig with new
+DBAB: 010800   [269]    		ld bc,0x0008		; set length to 1 character
+DBAE: 2154DC   [279]    		ld hl,ram_save+0x18	; MEM loc of 4th altered char
+DBB1: 114800   [289]    		ld de,VRAMCHAR+0x08	; VRAM loc of 2nd char
+DBB4: CD5C00   [306]    		call LDIRVM			; replace orig with new
+DBB7: C9       [316]    		ret				; exit
+DBB8:                   rotate_ram_sv:				; copy of the MEM position
+DBB8: 3CDC              		dw ram_save			; to increase without losing
+                        #include "slide.asm"
+DBBA:                   slide_VRAM:
+DBBA: 111000   [10]     		ld de,0x0010		; point to 3rd char
+DBBD: 3AF8F7   [23]     		ld a,(0xF7F8)		; get USR argument (int var)
+DBC0: 214000   [33]     		ld hl,VRAMCHAR		; get the VRAM char position
+DBC3: FE00     [40]     		cp 0x00			; compare the USR argument
+DBC5: CAFBDB   [50|50]  		jp z,slide_V		; if 0, do the vertical slide
+                        
+DBC8:                   slide_H:
+DBC8: 3A00DA   [13]     		ld a,(var+0)		; get the total bytes length
+DBCB: 47       [17]     		ld b,a			; put in b for the loop
+DBCC: FE08     [24]     		cp 0x08			; see if it is 8
+DBCE: 2820     [31|36]  		jr z,slide_H_small	; if yes, go do the small slide
+DBD0: 0610     [38]     		ld b,0x10			; if not. make the loop 2 chars
+                        
+DBD2:                   slide_H_full:
+DBD2: CD4A00   [17]     		call RDVRM			; get the 1st byte of 1st char 
+DBD5: 4F       [21]     		ld c,a			; put in c
+DBD6: 19       [32]     		add hl,de			; point hl to the 3rd char col 
+DBD7: CD4A00   [49]     		call RDVRM			; get its 1st VRAM byte
+DBDA: CB1F     [57]     		rr a				; rotate it and get carry
+DBDC: CB19     [65]     		rr c				; rotate 1st byte and pass carry
+DBDE: 3002     [72|77]  		jr nc,slide_H_cont	; if las carry is not 0
+DBE0: EE80     [79]     		xor 0b10000000		; make left bit of byte in a be 1
+DBE2:                   slide_H_cont:		
+DBE2: CD4D00   [17]     		call WRTVRM			; write it back to VRAM
+DBE5: A7       [21]     		and a				; reset carry for next operation
+DBE6: ED52     [36]     		sbc hl,de			; point hl back to 1st VRAM byte
+DBE8: 79       [40]     		ld a,c			; get the byte in c
+DBE9: CD4D00   [57]     		call WRTVRM			; write back to VRAM
+DBEC: 23       [63]     		inc hl			; send hl to next VRAM byte
+DBED: 10E3     [71|76]  		djnz slide_H_full		; repeat until finished
+DBEF: C9       [81]     		ret				; exit
+                        
+DBF0:                   slide_H_small:
+DBF0: CD4A00   [17]     		call RDVRM			; get ist VRAM byte
+DBF3: 0F       [21]     		rrca				; rotate it to the right
+DBF4: CD4D00   [38]     		call WRTVRM			; write it back
+DBF7: 23       [44]     		inc hl			; send hl to next byte
+DBF8: 10F6     [52|57]  		djnz slide_H_small	; do until finished
+DBFA: C9       [62]     		ret				; return
+                        
+DBFB:                   slide_V:
+DBFB: 19       [11]     		add hl,de			; send hl to the 3rd char
+DBFC: CD4A00   [28]     		call RDVRM			; get its 1st byte
+DBFF: F5       [39]     		push af			; save it
+DC00: 214000   [49]     		ld hl,VRAMCHAR		; send hl back to 1st char
+DC03: CD4A00   [66]     		call RDVRM			; get its 1st byte
+DC06: F5       [77]     		push af			; save it
+DC07: 012000   [87]     		ld bc,0x0020		; set length to all chars
+DC0A: 113CDC   [97]     		ld de,ram_save		; set MEM to start pos
+DC0D: 214000   [107]    		ld hl,VRAMCHAR		; set VRAM to 1st char byte
+DC10: CD5900   [124]    		call LDIRMV			; copy to MEM
+DC13: 011F00   [134]    		ld bc,0x001f		; set length to all minus 1 byte
+DC16: 213DDC   [144]    		ld hl,ram_save+0x01	; set MEM to start pos +1
+DC19: 114000   [154]    		ld de,VRAMCHAR		; set VRAM to 1st char byte
+DC1C: CD5C00   [171]    		call LDIRVM			; copy back from MEM offset by 1
+                        
+DC1F: 110700   [181]    		ld de,0x0007		; set de to the len of 1 char
+DC22: 3A00DA   [194]    		ld a,(var+0)		; get total byte length
+DC25: FE08     [201]    		cp 0x08			; see if it is 1 character
+DC27: 2802     [208|213]		jr z,slide_small		; if yes, jump ahead
+DC29: 1E0F     [215]    		ld e,0x0f			; if not. set the len to 2 char
+DC2B:                   slide_small:
+DC2B: 214000   [10]     		ld hl,VRAMCHAR		; set VRAM to 1st char byte
+DC2E: 19       [21]     		add hl,de			; send to last byte of this col 
+DC2F: F1       [31]     		pop af			; get saved 1st byte of this col
+DC30: CD4D00   [48]     		call WRTVRM			; write it back to VRAM
+                        						; next only needed for full slide
+DC33: 111000   [58]     		ld de,0x0010		; make de point to 3rd char
+DC36: 19       [69]     		add hl,de			; send to last byte of this col
+DC37: F1       [79]     		pop af			; get saved 1st byte of this col
+DC38: CD4D00   [96]     		call WRTVRM			; write it back to VRAM
+DC3B: C9       [106]    		ret				; exit
+                        
+DC3C:                   ram_save:					; MEM pos to use as buffer 
+DC3C: 00                		db 0x0
+                        
+
+
+; +++ segments +++
+
+#CODE          = $D9F9 = 55801,  size = $0244 =   580
+
+; +++ global symbols +++
+
+EDTBLKPOS       = $184E =  6222          main.asm:12
+FILVRM          = $0056 =    86          main.asm:7
+LDIRMV          = $0059 =    89          main.asm:8
+LDIRVM          = $005C =    92          main.asm:9
+RDVRM           = $004A =    74          main.asm:5
+VRAMCHAR        = $0040 =    64          main.asm:10
+WRTVRM          = $004D =    77          main.asm:6
+_end            = $DC3D = 56381          main.asm:13
+_size           = $0244 =   580          main.asm:13 (unused)
+copy_VRAM       = $DA3E = 55870          copy.asm:1
+copy_back       = $DA5F = 55903          copy.asm:18
+copy_loopX      = $DA53 = 55891          copy.asm:12
+copy_loopY      = $DA4E = 55886          copy.asm:8
+copy_read       = $DA73 = 55923          copy.asm:32
+copy_var        = $DA79 = 55929          copy.asm:36
+fill_VRAM       = $DA30 = 55856          invertFill.asm:19
+flip_H          = $DABE = 55998          flip.asm:6 (unused)
+flip_H_byte     = $DAC5 = 56005          flip.asm:10
+flip_V          = $DB03 = 56067          flip.asm:40
+flip_VRAM       = $DAB3 = 55987          flip.asm:1
+flip_V_full     = $DB24 = 56100          flip.asm:53
+flip_V_loop     = $DB27 = 56103          flip.asm:56
+flip_bitloop    = $DACC = 56012          flip.asm:15
+flip_var        = $DB3F = 56127          flip.asm:71
+invert_VRAM     = $DA1D = 55837          invertFill.asm:7
+invert_loop     = $DA24 = 55844          invertFill.asm:11
+pop_ONE         = $DAAF = 55983          populateEdit.asm:39
+pop_cont        = $DA97 = 55959          populateEdit.asm:21
+pop_loopL       = $DA84 = 55940          populateEdit.asm:6
+pop_loopX       = $DA91 = 55953          populateEdit.asm:16
+pop_loopY       = $DA89 = 55945          populateEdit.asm:10
+populate_edit   = $DA7A = 55930          populateEdit.asm:1
+ram_save        = $DC3C = 56380          main.asm:40
+rotate          = $DB47 = 56135          rotate.asm:5
+rotate_VRAM     = $DB40 = 56128          rotate.asm:1
+rotate_bitloop  = $DB50 = 56144          rotate.asm:10
+rotate_fillback = $DB70 = 56176          rotate.asm:28
+rotate_ram_sv   = $DBB8 = 56248          rotate.asm:58
+slide_H         = $DBC8 = 56264          slide.asm:8 (unused)
+slide_H_cont    = $DBE2 = 56290          slide.asm:24
+slide_H_full    = $DBD2 = 56274          slide.asm:15
+slide_H_small   = $DBF0 = 56304          slide.asm:34
+slide_V         = $DBFB = 56315          slide.asm:42
+slide_VRAM      = $DBBA = 56250          slide.asm:1
+slide_small     = $DC2B = 56363          slide.asm:63
+start           = $DA08 = 55816          main.asm:24
+var             = $DA00 = 55808          main.asm:21
+
+
+total time: 0.0051 sec.
+no errors
