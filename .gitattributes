@@ -1,2 +1,1 @@
-*.bad linguist-language=vb
-*.asc linguist-language=vb
+*.bad;*.asc linguist-language=vb
