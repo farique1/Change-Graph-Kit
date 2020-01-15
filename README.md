@@ -1,5 +1,5 @@
 # Change Graph Kit  
-v1.5.1
+v1.6
 
 **CGK** is a MSX 1 Basic program that reads a binary file on disk, display its contents and modify them on the disk itself.  
 
