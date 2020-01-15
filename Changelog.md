@@ -1,5 +1,16 @@
 # Change Graph Kit
 
+## **v1.6.0**  
+***14-1-2020***  
+
+- Updated most subroutines to the new Dignified FUNC proto-function
+- Replaced operators with the new Dignified +=, ++, etc where possible
+- "|M|Kys" not showing anymore on Edit screen if on ML fallback
+- Made DEFINEs for chr$ keys, keyboard scans and screen drawing
+- Error handling improvements
+- Small code adjustments, cleanup and optimizations
+- Fixed bug with a wrong error number when a support file was not found
+
 ## **v1.5.1**  
 ***17-9-2019***  
 - External .com file ML routines, keeping a simplified version on DATA as a fall back
