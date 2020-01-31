@@ -798,14 +798,14 @@ return
 	if err = 55 and errorType = 4 then _
 		errorType = 0 :configLoad = false:
 		configMessage$ = "CONFIG FILE CORRUPTED":
-		resume {config_failed}:
+		resume {config_failed}
 	if err = 53 and errorType = 4 then _
 		errorType = 0 :configLoad = false:
 		configMessage$ = "CONFIG FILE NOT FOUND":
-		resume {config_failed}:
+		resume {config_failed}
 	if err = 53 and errorType = 3 _
 		then errorType = 0:
-		resume {ml_fallback}:
+		resume {ml_fallback}
 	if (err = 53 and errorType = 1) or err = 70 then goto {file_not_found}
 	~errorNum = err :if errorNum > 25 then errorNum -= 24
 	locate 0,20:print[enter]
