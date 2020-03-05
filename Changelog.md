@@ -1,4 +1,14 @@
+
 # Change Graph Kit  
+
+## **v1.7**  
+***29-2-2020***  
+
+- Updated some labels to the new **Loop Labels**.
+- Updated some REMs to **Comment Blocks**.
+- Enclosed aux routines in **Line Toggles**.
+- Converted graphics to **unicode** analogues and changed file format encoding to UTF-8.
+- Fixed Bug saving drawing 1 byte lower.
   
 ## **v1.6.1**  
 ***28-1-2020***  
